@@ -3,6 +3,7 @@ sys.path.append('/home/ubuntu/Ai_FPV/HiwonderSDK')
 import Board
 import time
 from pynput import keyboard, mouse
+import threading
 
 # Code to control the armpi arm with mouse and keyboard
 
@@ -10,6 +11,7 @@ keys_held = []
 pulse_values = [500,500,500,500,500,500]
 mouse_held = [False, False]
 mouse_coords = [[0,0],[0,0]] # Left is previous value, right is new one
+thread_list = []
 
 def keyboard_on_press(key):
 	if key.char not in keys_held:
@@ -17,7 +19,6 @@ def keyboard_on_press(key):
 			
 def keyboard_on_release(key):
 	keys_held.remove(key.char)
-	Board.stopBusServo(6)
 
 def mouse_on_move(x, y):
 	if mouse_coords[0] == [0,0]: # default
@@ -29,6 +30,20 @@ def mouse_on_move(x, y):
 
 def update_mouse_position():
 	mouse_coords[0] = mouse_coords[1]
+
+def handle_threading(id):
+	if keys_held == []:
+		return
+	to_check = []
+	if id == 6:
+		to_check = ["a","d"]
+	elif id == 4:
+		to_check = ["w", "s"]
+	
+	for i in range(len(keys_held)-1, -1, -1):
+		if keys_held[i] in to_check:
+			print(keys_held[i])
+			handle_key(keys_held[i])
 
 def mouse_on_click(x, y, button, pressed):
 	if str(button) == "Button.left":
@@ -43,6 +58,7 @@ def mouse_on_click(x, y, button, pressed):
 			mouse_held[1] = False
 
 def handle_key(letter): # Set to -1 to counteract 0 based indexing
+	print("made it")
 	if letter == 'a':
 		id = 6
 		update_pulse_value(id, True)
@@ -53,6 +69,17 @@ def handle_key(letter): # Set to -1 to counteract 0 based indexing
 		update_pulse_value(id, False)
 		pulse = pulse_values[id - 1]
 		Board.setBusServoPulse(id, pulse, 100)
+	elif letter == 'w':
+		id = 4
+		update_pulse_value(id, True)
+		pulse = pulse_values[id - 1]
+		Board.setBusServoPulse(id, pulse, 100)
+	elif letter == 's':
+		id = 4
+		update_pulse_value(id, False)
+		pulse = pulse_values[id - 1]
+		Board.setBusServoPulse(id, pulse, 100)
+
 	time.sleep(0.1)
 
 def handle_mouse_click():
@@ -102,6 +129,10 @@ def update_pulse_value(id, positive):
 			pulse += PULSE_INCREASE
 		else:
 			pulse -= PULSE_INCREASE
+	elif pulse == 1000 and not positive:
+		pulse -= PULSE_INCREASE
+	elif pulse == 0 and positive:
+		pulse += PULSE_INCREASE
 	pulse_values[id] = pulse
 
 def initialize():
@@ -125,18 +156,18 @@ if __name__ == '__main__':
 	initialize()
 
 	while True:
-
+		thread_a_or_d = threading.Thread(target=handle_threading, args=(6,), daemon=True)
+		thread_w_or_s = threading.Thread(target=handle_threading, args=(4,), daemon=True)
+		thread_a_or_d.start()
+		thread_w_or_s.start()
 		if mouse_held[0] or mouse_held[1]:
 			handle_mouse_click()
 		if mouse_coords[0] != mouse_coords[1]:
-			handle_mouse_movement()	
+			handle_mouse_movement()
 		#todo: Turn this into a function
-		if len(keys_held) > 0:
-			key = keys_held[-1]
-			handle_key(key)
-		#print(mouse_coords)
+		
 
 		update_mouse_position()
-
-			
-	
+		print(keys_held)
+		thread_a_or_d.join()
+		thread_w_or_s.join()
